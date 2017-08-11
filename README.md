@@ -1,8 +1,6 @@
 # SwitchSearchable
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/switch_searchable`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+Manages multiple search engines in your Rails app. Supported are - PGSearch, AlgoliaSearch and Elasticsearch.
 
 ## Installation
 
@@ -22,17 +20,90 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+***Make sure you have setup services with Algolia, Elasticsearch. If you are using PGSearch nothing needs to be setup.***
 
-## Development
+In your ENV - say for example you have Algolia, Elasticsearch and PGSearch setup at the same time:
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+```
+ALGOLIA_APP_ID="lasdfu0as98fusaoij"
+ALGOLIA_API_KEY="doasf0a8uf3098ufwo9fjoiajfaldsj"
+ALGOLIA_ENVIRONMENT="staging"
+ELASTICSEARCH_HOST="196.223.442.112"
+SEARCH_ENGINE = "Postgres"
+```
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+`SEARCH_ENGINE` is set to `"PGSearch"`. This means that you have PGSearch activated while the rest are not.
 
-## Contributing
+To activate Elasticsearch:
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/switch_searchable.
+```
+SEARCH_ENGINE = "Elasticsearch"
+```
+
+To activate Algolia:
+
+```
+SEARCH_ENGINE = "Algolia"
+```
+
+In your `config/initializers/switch_searchable.rb` file:
+
+```
+if ENV["SEARCH_ENGINE"] == "Algolia"
+
+  AlgoliaSearch.configuration = {
+    application_id: ENV["ALGOLIA_APP_ID"],
+    api_key: ENV["ALGOLIA_API_KEY"],
+  }
+
+elsif ENV["SEARCH_ENGINE"] == "Elasticsearch"
+
+  config = {
+    host: ENV["ELASTICSEARCH_HOST"],
+    transport_options: {
+      request: {
+        timeout: 5,
+      },
+    },
+  }
+
+  if File.exists?("config/elasticsearch.yml")
+    yml = ERB.new(File.new("config/elasticsearch.yml").read)
+    config.merge!(YAML.load(yml.result)).deep_symbolize_keys
+  end
+
+  Elasticsearch::Model.client = Elasticsearch::Client.new(config)
+end
+```
+
+In your AR model:
+
+```ruby
+class Lead < ActiveRecord::Base
+  include SwitchSearchable::Searchable
+
+  searchable_attributes(
+    :company_name,
+    :first_name,
+    :last_name,
+    :email,
+    {phones: [:number]}
+  )
+
+  has_may :phones
+end
+```
+
+To create an index, run:
+
+```
+Lead.reindex!
+```
+
+After that, you can now search:
+```
+Lead.search("Neil the man")
+```
 
 ## License
 
