@@ -9,8 +9,14 @@ module SwitchSearchable
 
         klass.class_eval do
           extend ClassMethods
-          include "SwitchSearchable::SearchEngine::#{ENV["SEARCH_ENGINE"]}".
-            constantize
+
+          if Rails.env.production?
+            include "SwitchSearchable::SearchEngine::Algolia".
+              constantize
+          else
+            include "SwitchSearchable::SearchEngine::Postgres".
+              constantize
+          end
         end
 
         check_methods(klass)
@@ -20,14 +26,14 @@ module SwitchSearchable
         raise(
           BadConfiguration,
           "Please add SEARCH_ENGINE in your environment variables"
-        ) unless ENV["SEARCH_ENGINE"]
+        ) unless search_engine_default_local
       end
 
       def check_methods(klass)
         raise(
           RequiredMethodNotDefined,
           ":raise_errors method not defined in your search engine"
-        ) unless "SwitchSearchable::SearchEngine::#{ENV["SEARCH_ENGINE"]}".
+        ) unless "SwitchSearchable::SearchEngine::#{search_engine_default_local}".
           constantize.respond_to? :raise_errors
 
         raise(
@@ -59,6 +65,12 @@ module SwitchSearchable
         def reindex!
           reindex_search_engine!
         end
+      end
+
+      private
+
+      def search_engine_default_local
+        ENV["SEARCH_ENGINE"] || "Postgres"
       end
     end
   end
